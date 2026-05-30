@@ -8,6 +8,7 @@ A tiny transformer trained to copy a 3-gram language model. After training, the 
 
 ```bash
 pip install torch
+(If linux,make a venv with python, venv-activate and install requirements.txt)
 python3 generate.py "once upon a time"
 ```
 
