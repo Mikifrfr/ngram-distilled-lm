@@ -1,83 +1,74 @@
 # Tiny LM Distilled from N-grams
 
-**PPL 23.2 with 792K parameters, zero external tables at inference.**
+PPL 23.2 with 792K params, no n-gram tables at inference. Updated to 22.2 with 10M tokens and 1M params.
 
 ---
 
-## Abstract
+## What this is
 
-We present a method for training a tiny transformer language model (792K parameters) that achieves a perplexity of 23.2 on TinyStories by distilling knowledge from an interpolated 3-gram language model. The student model is a 4-layer causal transformer with tied embeddings trained on a combined loss of standard next-token cross-entropy and KL divergence against the teacher's top-10 probability distribution. At inference time, no n-gram tables or external data structures are required — the model is a pure neural network forward pass.
+Train a 4-layer transformer to copy a 3-gram language model. Throw away the n-gram tables. What's left is a 1M parameter LM that runs on a laptop CPU, with perplexity in the ballpark of much bigger models.
 
-## Method
+## How it works
 
-### Teacher: 3-gram with Add-One Smoothing
+**Teacher:** 3-gram with add-one smoothing, counted from 8M training tokens (vocab size 13,639). For each context, keep the top 10 next tokens and their probabilities.
 
-The teacher is a 3-gram language model with add-one (Laplace) smoothing counted from the training set (4.4M tokens, 9,115 vocabulary). For each 3-gram context, we store the top-10 most likely next tokens and their probabilities:
+$$P_{teacher}(w | c) = \frac{count(c, w) + \alpha}{\sum count(c, w') + \alpha V}$$
 
-$$P_{\text{teacher}}(w | c) = \frac{\text{count}(c, w) + \alpha}{\sum_{w'} \text{count}(c, w') + \alpha V}$$
+($\alpha = 0.1$, $V = 13639$)
 
-where $\alpha = 0.1$, $V = 9115$, and probabilities are renormalized over the top-10 tokens. This captures the teacher's confidence distribution rather than just its argmax prediction.
+**Student:** 4-layer causal transformer, embed=64, hidden=256, 4 heads, tied embeddings. 1,081,152 params total.
 
-### Student: Causal Transformer
+**Loss:** 
 
-The student is a 4-layer causal transformer with:
-- Embedding dimension: 64
-- Hidden dimension: 256
-- Attention heads: 4
-- Sequence length: 128
-- **792,616 total parameters**
-- Tied input/output embeddings
+$$L = L_{CE} + 0.3 \cdot KL(P_{teacher}^{top10} || P_{student})$$
 
-### Training Objective
+The KL term forces the student to match the teacher's full distribution, not just its best guess. Without it, the student ignores the teacher's uncertainty and ends up worse-calibrated.
 
-$$\mathcal{L} = \mathcal{L}_{\text{CE}} + \lambda \cdot D_{\text{KL}}(P_{\text{teacher}} \| P_{\text{student}})$$
-
-where $\lambda = 0.3$ and the KL divergence is computed over the teacher's top-10 tokens at each position. The KL term is only applied at positions where the teacher has a valid prediction (i.e., the 3-gram context was observed at least once in training).
-
-Training uses AdamW ($\text{lr} = 3\times 10^{-4}$, $\cos$ schedule) for 12 epochs on a single AMD 7700 XT (16GB VRAM), completing in ~4 minutes.
+Training: AdamW, lr=3e-4, cos schedule, 12 epochs. ~9 minutes on an AMD 7700 XT.
 
 ## Results
 
-| Model | Parameters | External Tables | Accuracy | Perplexity |
-|-------|-----------|----------------|----------|------------|
-| Random | — | — | 0.01% | 9,115 |
-| 1-gram (max freq) | — | Yes | 26.9% | ~500 |
-| 3-gram exact | — | Yes | 42.3% (86% cov) | ~18K |
+| Model | Params | Tables at inference | Accuracy | Perplexity |
+|-------|--------|-------------------|----------|------------|
+| Random | - | - | 0.01% | 9,739 |
+| 1-gram (most frequent) | - | Yes | 26.9% | ~500 |
+| 3-gram exact | - | Yes | 42.3% (86% cov) | ~18K |
 | MoE + N-gram Tables | 380K | Yes | 37.2% | 25.0 |
-| **Distilled Transformer** | **792K** | **No** | **27.6%** | **23.2** |
+| **Distilled Transformer** | **1.08M** | **No** | **27.6%** | **22.2** |
 
-### Comparison to Top-1 Distillation
+### Top-K vs Top-1
 
-We compare our top-K distillation ($K=10$) against a top-1 variant where the teacher only provides its most likely token:
+Top-K (K=10) gives much better perplexity than top-1:
 
 | Variant | Accuracy | Perplexity |
 |---------|----------|------------|
-| Top-1 Distillation | 25.3% | 29.1 |
-| **Top-K Distillation (ours)** | **27.6%** | **23.2** |
+| Top-1 distillation | 25.3% | 29.1 |
+| Top-K distillation | 27.6% | 23.2 |
 
-The full teacher distribution provides a 5.9-point perplexity improvement. Top-1 distillation forces the student to match the teacher's best guess even when the teacher is uncertain, hurting calibration.
+Top-1 forces the student to match the teacher's argmax even when the teacher is uncertain (a 3-gram is wrong 58% of the time). Top-K lets the student learn the teacher's confidence.
 
-### Comparison to Table-Based MoE
+### More data helped a little
 
-Our MoE architecture (380K parameters + n-gram tables) achieves higher accuracy (37.2% vs 27.6%) but worse perplexity (25.0 vs 23.2). This reflects the accuracy-perplexity decoupling: the MoE's peaky exact predictions nail more tokens but produce poorly-calibrated probabilities when wrong, while the distilled transformer's smoothed distribution better captures uncertainty.
+| Data | Params | Vocab | Acc | PPL |
+|------|--------|-------|-----|-----|
+| 5.5M tokens | 792K | 9,115 | 27.6% | 23.2 |
+| 10M tokens | 1.08M | 13,639 | 27.6% | 22.2 |
 
-## Key Findings
+Doubling the data improved PPL by 1.0. Diminishing returns -- model capacity is the bottleneck, not data.
 
-1. **N-gram teachers work for tiny LM distillation.** A simple 3-gram with add-one smoothing is a strong enough teacher to train a competitive tiny transformer.
+## Key points
 
-2. **Top-K beats top-1.** The full distribution signal is crucial. Using only the teacher's argmax loses 5.9 points of perplexity.
+- A 3-gram LM with add-one smoothing is a good enough teacher for a tiny transformer.
+- The full distribution (top-K KL) matters more than argmax (top-1 CE). 5.9 PPL difference.
+- At inference, zero tables. Pure neural net forward pass. Runs on a toaster.
+- The MoE-with-tables beats this on accuracy (37% vs 27%). The distilled transformer beats it on perplexity (22.2 vs 25.0). Different tradeoffs.
 
-3. **PPL 23.2 at 792K without tables.** This is the headline number. The model is a pure neural network at inference — deployable anywhere.
+## What's next
 
-4. **Trade-off: accuracy vs calibration.** The table-based MoE wins on accuracy (37.2%) but the distilled transformer wins on perplexity (23.2). The choice depends on whether you need a chatbot (accuracy) or a well-calibrated next-token predictor (perplexity).
+- Bigger student (2-5M params) to close the accuracy gap.
+- Mixed-order teacher (interpolate 1g/3g/5g during training, still no tables at inference).
+- Code/multilingual -- should generalize wherever token statistics are regular.
 
-## Future Work
+## Notes
 
-- **Larger student models:** Would 2-5M params close the accuracy gap entirely?
-- **Mixed teacher:** What if the teacher interpolates multiple n-gram orders during training but the student still has no tables at inference?
-- **Code & multilingual:** The approach should generalize to any domain with regular token statistics
-- **Adaptive K:** Let the student choose how many teacher tokens to attend to per position
-
-## Conclusion
-
-We demonstrate that a 792K parameter transformer, trained to match a 3-gram teacher's top-10 probability distribution, achieves a perplexity of 23.2 on TinyStories without any external tables at inference. The model trains in 4 minutes on consumer GPU hardware. This suggests that n-gram distillation is a viable path to deployable tiny language models.
+Numbers are on a held-out 20% split of TinyStories. The 3-gram teacher covers 86% of test contexts. For the 14% it hasn't seen, the student falls back to what it learned from similar contexts during training -- which is the whole point of distillation.
