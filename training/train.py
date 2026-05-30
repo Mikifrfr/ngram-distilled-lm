@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Distilled Transformer — 3-gram teacher, top-K KL distillation.
-Clean version. Causal LM. On-the-fly teacher indexing.
-"""
 import torch, torch.nn as nn, torch.nn.functional as F
 import os, re, time, math
 from collections import Counter
@@ -57,7 +52,7 @@ def index_teacher(ids):
     T = len(ids) - 3
     import numpy as np
     tk = np.zeros((T, K_TEACHER), dtype=np.int64)
-    tp = np.zeros((T, K_TEACHER))
+    tp = np.zeros((T, K_TEACHER))Remove shebang line frogenerate.py
     t0 = time.time()
     for i in range(T):
         if i % 500000 == 0:
