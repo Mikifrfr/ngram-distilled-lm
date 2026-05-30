@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """N-gram Distilled Transformer — tiny LM inference.
 
 Usage:
