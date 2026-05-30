@@ -10,7 +10,7 @@ ALPHA, K_TEACHER = 0.1, 10
 
 # ─── Data ───
 print("Loading...", flush=True)
-dpath = os.path.expanduser('~/research/data/tinystories_10m.txt')
+dpath = os.path.expanduser('~/tinystories_10m.txt')
 with open(dpath, encoding='utf-8') as f: text = f.read()
 tokens = re.findall(r"\w+|[^\w\s]", text.lower())[:TRAIN_TOKENS]
 sp = int(len(tokens) * 0.8)
@@ -209,7 +209,7 @@ print(f"  Tokens: {n:,}")
 # Baselines
 # ─── Save model ───
 import pickle, os
-ckpt_dir = os.path.expanduser('~/research/models/distill-tfm/')
+ckpt_dir = os.path.expanduser('~/model/distill-tfm/')
 os.makedirs(ckpt_dir, exist_ok=True)
 torch.save(model.state_dict(), ckpt_dir + 'model.pt')
 with open(ckpt_dir + 'vocab.pkl', 'wb') as f:
