@@ -2,7 +2,7 @@
 
 **1M params, PPL 22.2 on TinyStories. No n-gram tables at inference.**
 
-A tiny transformer trained to copy a 3-gram language model. After training, the n-gram tables get thrown away — it's just a neural net forward pass.
+A tiny transformer trained to copy a 3-gram language model. After training, the n-gram tables get thrown away, it's just a neural net forward pass.
 
 ## Quick start
 
@@ -25,7 +25,7 @@ python3 generate.py "once upon a time"
 
 1. Count 3-grams from 8M tokens of TinyStories. Add-one smoothing.
 2. Train a 4-layer transformer (embed=64, hidden=256, 4 heads, tied embeddings) to predict the same distribution as the 3-gram.
-3. Loss = CE + 0.3 * KL(teacher_top10 || student). The KL term is the important part — it forces the student to match the teacher's probabilities, not just its best guess.
+3. Loss = CE + 0.3 * KL(teacher_top10 || student). The KL term is the important part, it forces the student to match the teacher's probabilities, not just its best guess.
 4. At inference, load only the transformer. No tables.
 
 Training takes ~9 minutes on an AMD 7700 XT.
