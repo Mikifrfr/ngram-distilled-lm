@@ -28,7 +28,7 @@ python3 generate.py "once upon a time"
 3. Loss = CE + 0.3 * KL(teacher_top10 || student). The KL term is the important part, it forces the student to match the teacher's probabilities, not just its best guess.
 4. At inference, load only the transformer. No tables.
 
-Training takes ~9 minutes on an AMD 7700 XT.
+Training takes ~9 minutes on an AMD 7800 XT.
 
 ## Files
 
